@@ -1,0 +1,27 @@
+[
+  {
+    "email": "gulatisparsh0212@gmail.com",
+    "password": "123456",
+    "confirmed": false
+  },
+  {
+    "email": "verify.unifynd@gmail.com",
+    "password": "Unifynd@0202",
+    "confirmed": false
+  },
+  {
+    "email": "verify.unifynd@gmail.com",
+    "password": "Unifynd@0202",
+    "confirmed": false
+  },
+  {
+    "email": "gulatisparsh0212@gmail.com",
+    "password": "abcde",
+    "confirmed": false
+  },
+  {
+    "email": "gulatisparsh0212@gmail.com",
+    "password": "12345",
+    "confirmed": false
+  }
+]
