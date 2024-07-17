@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirm Email</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+  <div class="container mt-5">
+    <div class="row justify-content-center">
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header">
+            <h2>Confirm Email</h2>
+          </div>
+          <div class="card-body">
+            <form id="confirm-form">
+              <div class="form-group">
+                <label for="confirm-email">Email</label>
+                <input type="email" id="confirm-email" class="form-control" placeholder="Email" required>
+              </div>
+              <div class="form-group">
+                <label for="confirm-code">Confirmation Code</label>
+                <input type="text" id="confirm-code" class="form-control" placeholder="Confirmation Code" required>
+              </div>
+              <button type="submit" class="btn btn-primary btn-block">Confirm Email</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById("confirm-form").addEventListener("submit", function (event) {
+      event.preventDefault();
+      const email = document.getElementById("confirm-email").value;
+      const code = document.getElementById("confirm-code").value;
+
+      fetch("/confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, code }),
+      })
+      .then(response => response.text())
+      .then(data => {
+        alert(data);
+        if (data === "Email confirmed successfully") {
+          window.location.href = "/login";
+        }
+      })
+      .catch(error => console.error("Error:", error));
+    });
+  </script>
+</body>
+</html>
