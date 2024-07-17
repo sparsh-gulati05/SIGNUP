@@ -1,166 +1,260 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const nodemailer = require('nodemailer');
-const fs = require('fs');
-const path = require('path');
-require('dotenv').config();  // Load environment variables from .env file
-const crypto = require('crypto'); // Import the crypto module for generating tokens.
+const express = require("express");
+const bodyParser = require("body-parser");
+const nodemailer = require("nodemailer");
+const fs = require("fs");
+const path = require("path");
+require("dotenv").config(); // Load environment variables from .env file
+const crypto = require("crypto"); // Import the crypto module for generating tokens.
 
 const app = express();
 const port = 3000;
 
 app.use(bodyParser.json());
-app.use(express.static('public'));
-const usersFilePath = './users.json';
+app.use(express.static(path.join(__dirname, "public"))); // Serve static files from 'public' directory
+const usersFilePath = path.join(__dirname, "users.json"); // Path to users.json file
 
 // Load existing users from the file
 let users = [];
 if (fs.existsSync(usersFilePath)) {
-    users = JSON.parse(fs.readFileSync(usersFilePath));
+  users = JSON.parse(fs.readFileSync(usersFilePath));
 }
 
 const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL,
-        pass: process.env.PASSWORD
-    }
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL,
+    pass: process.env.PASSWORD,
+  },
 });
 
 // Function to send verification email
 const sendVerificationEmail = async (email, token) => {
-    // Read the HTML template
-    const templatePath = path.join(__dirname, 'verification_mail.html');
-    let emailTemplate = fs.readFileSync(templatePath, 'utf-8');
+  // Read the HTML template
+  const templatePath = path.join(__dirname, "verification_mail.html");
+  let emailTemplate = fs.readFileSync(templatePath, "utf-8");
 
-    // Generate the verification link
-    const verificationLink = `http://localhost:${port}/confirm?token=${token}`;
-    // Alternative: For deployment, use the line below.
-    // const verificationLink = `https://sparsh-gulati05.github.io/UNIFYND/?token=${token}`;
+  // Generate the verification link
+  const verificationLink = `http://localhost:${port}/confirm?token=${token}`;
+  // Alternative: For deployment, use the line below.
+  // const verificationLink = `https://sparsh-gulati05.github.io/UNIFYND/?token=${token}`;
 
-    // Replace placeholders with actual values
-    emailTemplate = emailTemplate.replace('{{verification_link}}', verificationLink);
-    emailTemplate = emailTemplate.replace('{{email}}', email);
+  // Replace placeholders with actual values
+  emailTemplate = emailTemplate.replace(
+    "{{verification_link}}",
+    verificationLink
+  );
+  emailTemplate = emailTemplate.replace("{{email}}", email);
 
-    const mailOptions = {
-        from: process.env.EMAIL,
-        to: email,
-        subject: 'Email Confirmation',
-        html: emailTemplate // Use the HTML template
-    };
+  const mailOptions = {
+    from: process.env.EMAIL,
+    to: email,
+    subject: "Email Confirmation",
+    html: emailTemplate, // Use the HTML template
+  };
 
-    try {
-        await transporter.sendMail(mailOptions);
-        console.log(`Verification email sent to ${email}`);
-        return true;
-    } catch (error) {
-        console.error('Error sending email:', error);
-        return false;
-    }
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Verification email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error("Error sending email:", error);
+    return false;
+  }
 };
 
-
 // Serve the signup page as the main page
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+app.post("/signup", async (req, res) => {
+  const { email, password } = req.body;
 
+  try {
+    // Read the users file
+    const users = JSON.parse(fs.readFileSync(usersFilePath, "utf-8"));
 
-app.post('/signup', async (req, res) => {
-    const { email, password } = req.body;
+    // Check if the email already exists
+    const existingUserIndex = users.findIndex((u) => u.email === email);
 
-    try {
-        // Read the users file
-        const users = JSON.parse(fs.readFileSync(usersFilePath, 'utf-8'));
+    let token;
+    if (existingUserIndex !== -1) {
+      const existingUser = users[existingUserIndex];
+      if (existingUser.verified) {
+        return res.status(400).send("Account already exists and is verified.");
+      } else {
+        // Retain the existing token if the user is not verified
+        token = existingUser.token;
+        // Update the existing user's details
+        users[existingUserIndex] = { ...existingUser, password };
+      }
+    } else {
+      // Generate a unique token for email confirmation
+      token = crypto.randomBytes(16).toString("hex");
 
-        // Check if the email already exists
-        const existingUserIndex = users.findIndex(u => u.email === email);
-
-        let token;
-        if (existingUserIndex !== -1) {
-            const existingUser = users[existingUserIndex];
-            if (existingUser.verified) {
-                return res.status(400).send('Account already exists and is verified.');
-            } else {
-                // Retain the existing token if the user is not verified
-                token = existingUser.token;
-                // Update the existing user's details
-                users[existingUserIndex] = { ...existingUser, password };
-            }
-        } else {
-            // Generate a unique token for email confirmation
-            token = crypto.randomBytes(16).toString('hex');
-
-            // Add the new user to the users array
-            users.push({ email, password, verified: false, token });
-        }
-
-        // Save the updated users array to the file
-        fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2));
-
-        // Send the confirmation email
-        const emailSent = await sendVerificationEmail(email, token);
-        if (emailSent) {
-            res.status(200).send('Signup successful, please check your email to confirm your account.');
-        } else {
-            res.status(500).send('Signup successful, but failed to send confirmation email. Please try again later.');
-        }
-    } catch (error) {
-        console.error(`Error in /signup: ${error.message}`);
-        res.status(500).send('An unexpected error occurred. Please try again later.');
+      // Add the new user to the users array
+      users.push({ email, password, verified: false, token });
     }
+
+    // Save the updated users array to the file
+    fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2));
+
+    // Send the confirmation email
+    const emailSent = await sendVerificationEmail(email, token);
+    if (emailSent) {
+      res
+        .status(200)
+        .send(
+          "Signup successful, please check your email to confirm your account."
+        );
+    } else {
+      res
+        .status(500)
+        .send(
+          "Signup successful, but failed to send confirmation email. Please try again later."
+        );
+    }
+  } catch (error) {
+    console.error(`Error in /signup: ${error.message}`);
+    res
+      .status(500)
+      .send("An unexpected error occurred. Please try again later.");
+  }
 });
 
-app.get('/confirm', (req, res) => {
-    const { token } = req.query; // Extract the token from the query parameters.
-    const user = users.find(u => u.token === token); // Find the user with the matching token.
+app.get("/confirm", (req, res) => {
+  const { token } = req.query; // Extract the token from the query parameters.
+  const user = users.find((u) => u.token === token); // Find the user with the matching token.
+
+  if (user) {
+    user.verified = true; // Set the user's verified status to true.
+    user.token = null; // Remove the token after confirmation.
+    fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2)); // Save the updated users array to the file.
+    console.log(`User ${user.email} verified successfully`);
+    res.sendFile(path.join(__dirname, "public", "confirm.html")); // Serve the confirmation page.
+  } else {
+    res.status(404).send("Invalid confirmation link"); // Respond with a 404 status if the token is invalid.
+  }
+});
+
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // Read the users file
+    const users = JSON.parse(fs.readFileSync(usersFilePath, "utf-8"));
+
+    const user = users.find((u) => u.email === email);
 
     if (user) {
-        user.verified = true; // Set the user's verified status to true.
-        user.token = null; // Remove the token after confirmation.
-        fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2)); // Save the updated users array to the file.
-        console.log(`User ${user.email} verified successfully`);
-        res.sendFile(path.join(__dirname, 'public', 'confirm.html')); // Serve the confirmation page.
+      if (user.password === password) {
+        if (user.verified) {
+          res.status(200).send("Login successful");
+        } else {
+          // Resend the verification email
+          const emailSent = await sendVerificationEmail(email, user.token);
+          if (emailSent) {
+            res
+              .status(403)
+              .send(
+                "Please verify your email before logging in. A verification link has been sent to your email id."
+              );
+          } else {
+            res
+              .status(500)
+              .send(
+                "Failed to resend verification email. Please try again later."
+              );
+          }
+        }
+      } else {
+        res.status(401).send("Wrong Password. Please try Again!!");
+      }
     } else {
-        res.status(404).send('Invalid confirmation link'); // Respond with a 404 status if the token is invalid.
+      res.status(404).send("Account Not Found. Please Sign up to continue");
     }
+  } catch (error) {
+    console.error(`Error in /login: ${error.message}`);
+    res
+      .status(500)
+      .send("An unexpected error occurred. Please try again later.");
+  }
+});
+const sendPasswordResetEmail = async (email, token) => {
+  const mailOptions = {
+    from: process.env.EMAIL,
+    to: email,
+    subject: "Password Reset Request",
+    html: `<p>You are receiving this email because you (or someone else) have requested the reset of the password for your account.</p>
+             <p>Please click on the following link, or paste this into your browser to complete the process:</p>
+             <p><a href='http://localhost:${port}/reset_password.html?token=${token}'>Reset Password</a></p>
+             <p>If you did not request this, please ignore this email and your password will remain unchanged.</p>`,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Password reset email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error("Error sending password reset email:", error);
+    return false;
+  }
+};
+
+app.post("/forgot_password", async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = users.find((u) => u.email === email);
+
+    if (!user) {
+      return res.status(404).send("User not found.");
+    }
+
+    const resetToken = crypto.randomBytes(20).toString("hex");
+
+    user.resetToken = resetToken;
+    user.resetTokenExpiration = Date.now() + 3600000; // Token expires in 1 hour
+
+    fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2));
+
+    const emailSent = await sendPasswordResetEmail(email, resetToken);
+    if (emailSent) {
+      res.status(200).send("Password reset email sent.");
+    } else {
+      res.status(500).send("Failed to send password reset email.");
+    }
+  } catch (error) {
+    console.error(`Error in /forgot_password: ${error.message}`);
+    res.status(500).send("An unexpected error occurred.");
+  }
 });
 
-app.post('/login', async (req, res) => {
-    const { email, password } = req.body;
+app.post("/reset_password", async (req, res) => {
+  const { token, password } = req.body;
 
-    try {
-        // Read the users file
-        const users = JSON.parse(fs.readFileSync(usersFilePath, 'utf-8'));
+  try {
+    const user = users.find(
+      (u) => u.resetToken === token && u.resetTokenExpiration > Date.now()
+    );
 
-        const user = users.find(u => u.email === email);
-
-        if (user) {
-            if (user.password === password) {
-                if (user.verified) {
-                    res.status(200).send('Login successful');
-                } else {
-                    // Resend the verification email
-                    const emailSent = await sendVerificationEmail(email, user.token);
-                    if (emailSent) {
-                        res.status(403).send('Please verify your email before logging in. A verification link has been sent to your email id.');
-                    } else {
-                        res.status(500).send('Failed to resend verification email. Please try again later.');
-                    }
-                }
-            } else {
-                res.status(401).send('Wrong Password. Please try Again!!');
-            }
-        } else {
-            res.status(404).send('Account Not Found. Please Sign up to continue');
-        }
-    } catch (error) {
-        console.error(`Error in /login: ${error.message}`);
-        res.status(500).send('An unexpected error occurred. Please try again later.');
+    if (!user) {
+      return res.status(400).send("Invalid or expired token.");
     }
+
+    user.password = password;
+    user.resetToken = null;
+    user.resetTokenExpiration = null;
+
+    fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2));
+
+    res.status(200).send("Password has been reset successfully.");
+  } catch (error) {
+    console.error(`Error in /reset_password: ${error.message}`);
+    res.status(500).send("An unexpected error occurred.");
+  }
 });
 
 app.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`);
+  console.log(`Server is running at http://localhost:${port}`);
 });
